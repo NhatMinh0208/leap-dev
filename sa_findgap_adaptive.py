@@ -188,18 +188,27 @@ def compute_dwave(j: float, sampler: dimod.Sampler, runs: int) -> dict[str,float
     return res
 
 DEF_D: float = 0.01
+DEF_SIGMA: float = 0.1
+DEF_BETA: float = 0.01
+DEF_NS: int = 100 # can change this to 10, 20, 50
+DEF_PASS: float = 4 * (1.0 / (DEF_SIGMA * DEF_SIGMA)) * math.log(1.0 / DEF_BETA)
+
 def get_d(j: float, delta: float) -> float:
-    res = compute(j + delta / 2, FC_Composite, 1000)
-    res_d = compute(j - delta / 2, FC_Composite, 1000)
+    f1 = compute(j + delta / 2, FC_Composite, DEF_NS)['break']
+    f2 = compute(j - delta / 2, FC_Composite, DEF_NS)['break']
+    cntloop = 10 #Avoid long loop, 10 means maximum of 1000 runs
 
+    while (abs(f1 - f2) < DEF_PASS * delta or min(f1, f2) < DEF_PASS * delta) and cntloop > 0:
+        f1 += compute(j + delta / 2, FC_Composite, DEF_NS)['break']
+        f2 += compute(j - delta / 2, FC_Composite, DEF_NS)['break']
+        cntloop -= 1
 
-    print(f'{res_d["break"]} {res["break"]} {delta}')
-    if (res['break'] == 0):
+    if (f1 == 0):
         return 1e9
-    elif (res_d['break'] ==     0):
+    elif (f2 == 0):
         return -1e9
     else:
-        return math.log(res_d['break'] / res['break']) / delta
+        return math.log(f2 / f1) / delta
 
 
 DEF_LB: float = 0.002
@@ -280,12 +289,12 @@ cs_range = get_cs_range(DEF_LB, DEF_UB)
 result = hill_climb(cs_range[0], cs_range[1])
 result.sort()
 
-f = open(f'findgap3_runtime.csv', mode='a')
+f = open(f'findgap_adaptive_runtime.csv', mode='a')
 print(f'Run time: {(time.time() - start_time)} seconds')
 f.write(f'{iname},{(time.time() - start_time)}\n')
 f.close()
 
-f = open(f'findgap3_results/{iname}.csv', 'w', encoding='utf-8')
+f = open(f'findgap_adaptive_results/{iname}.csv', 'w', encoding='utf-8')
 f.write('abs,rel,p5no,3no,best,avg,break\n')
 sus: float = UTC(model)
 def output(j):
