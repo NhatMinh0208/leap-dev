@@ -55,7 +55,7 @@ class FakeChimeraSampler(dimod.Sampler, dimod.Structured):
             matrix[u][v] = bqm.quadratic[(u,v)]
 
         # Spin minimization
-        spin_value, spin_vector = sb.minimize(matrix, vector, domain='spin')
+        spin_value, spin_vector = sb.minimize(matrix, vector, domain='spin', device='cuda')
 
         return dimod.SampleSet.from_samples_bqm(spin_vector, bqm)
 
