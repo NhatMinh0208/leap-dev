@@ -15,12 +15,13 @@ from dwave.embedding.chain_strength import uniform_torque_compensation as UTC
 from dwave.embedding import embed_bqm, unembed_sampleset, EmbeddedStructure
 from functools import partial
 from copy import deepcopy
-
+import torch
+import simulated_bifurcation as sb
 from dwave.samplers import SimulatedAnnealingSampler
 SASampler = SimulatedAnnealingSampler()
 CSampler = DWaveSampler(solver={'topology__type': 'pegasus'})
 
-hw = dnx.chimera_graph(16,16)
+hw = dnx.pegasus_graph(16)
 
 class FakeChimeraSampler(dimod.Sampler, dimod.Structured):
     @property
@@ -42,7 +43,21 @@ class FakeChimeraSampler(dimod.Sampler, dimod.Structured):
         return hw.edges.keys()
     
     def sample(self, bqm, **parameters):
-        return SASampler.sample(bqm, **parameters)
+        n = len(hw.nodes)
+
+        matrix = torch.zeros([n,n], dtype=torch.int32)
+        vector = torch.zeros([n], dtype=torch.int32)
+
+        for g in bqm.linear.keys:
+            vector[g] = bqm.linear[g]
+
+        for (u,v) in bqm.quadratic.keys:
+            matrix[u][v] = bqm.quadratic[(u,v)]
+
+        # Spin minimization
+        spin_value, spin_vector = sb.minimize(matrix, vector, domain='spin')
+
+        return dimod.SampleSet.from_samples_bqm(spin_vector, bqm)
 
 FCSampler = FakeChimeraSampler()
 
@@ -203,12 +218,12 @@ cs_range = get_cs_range(DEF_LB, DEF_UB)
 result = hill_climb(cs_range[0], cs_range[1])
 result.sort()
 
-f = open(f'findgap2_runtime.csv', mode='a')
+f = open(f'findgap2_runtime_sb.csv', mode='a')
 print(f'Run time: {(time.time() - start_time)} seconds')
 f.write(f'{iname},{(time.time() - start_time)}\n')
 f.close()
 
-f = open(f'findgap2_results_p/{iname}.csv', 'w', encoding='utf-8')
+f = open(f'findgap2_results_sb/{iname}.csv', 'w', encoding='utf-8')
 f.write('abs,rel,p5no,3no,best,avg,break\n')
 sus: float = UTC(model)
 def output(j):
